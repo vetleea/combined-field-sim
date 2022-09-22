@@ -29,7 +29,7 @@ def nPoleComponent(n,x,y,amplitude, angle,Rref = 1):
     #Complex coefficients
     Cn = amplitude*(1+0*1j)
     #Creating By + iBy
-    ByBx = Cn*np.power(z/Rref,n-1)+0.0000001*np.cos(6*np.pi*z)+0.0000001*np.sin(6*np.pi*z)
+    ByBx = Cn*np.power(z/Rref,n-1)+0.1*Cn*np.power(z/Rref,4)+0.1*Cn*np.power(z/Rref,6)
     #Rotation
     ByBx = ByBx*np.exp(n*angle*1j)
     #Returning By and Bx
@@ -56,7 +56,7 @@ def B_r(x,y,Bx,By):
     phi = np.arctan2(y,x)
     B_r = np.empty_like(Bx)
     for n in range(len(Bx)):
-        B_r[n] = Bx[n]*np.cos(phi[n]) + By[n]*np.sin(phi[n])
+        B_r[n] = Bx[n]*np.cos(phi[n]) + By[n]*np.sin(phi[n])#+0.05*np.cos(5*np.pi*n)
     return B_r
 
 #Function used to create several circles to "measure" from
@@ -75,17 +75,6 @@ def CircleOfCircles(x_point,y_point,r_large,r_small,stepsize,n_circles):
             out_pos = np.append(out_pos, 1j*x[n]+y[n])
     return out_x, out_y, out_pos
 
-def Fourier_norm(t): #Function to return array normalized to the main field component N, and removes the first from and including N
-    sp = np.fft.fft((t))
-    freq = np.fft.fftfreq(t.shape[-1])
-    sp = sp[N:15+N] #Only take multipoles from main component and following
-    
-    sp = 1e4/sp[0]*sp #Scale the multipoles
-    """
-    sp_ind = np.argmax(sp)
-    sp_norm = [(10e4*x)/sp[sp_ind] for x in sp ]
-    """
-    return sp, freq
 
 # Under follows the functions for combining several measurements
 # as explained in "Combining rotating coil measurements" 
@@ -109,11 +98,9 @@ def MatrixM(N,K,r0,rc,z_pos):
     M = np.zeros((I*N,K))*1j
     try:
         for i,zi in enumerate(z_pos): 
-
             matrix = matrixWi(N,K,zi,r0,rc)
             M[i*N:(i+1)*N,:] = matrix
     except TypeError:
-        print(z_pos)
         matrix = matrixWi(N,K,z_pos,r0,rc)
     return M
 
@@ -121,7 +108,6 @@ def MatrixC(t):
     out = np.zeros(0)
     for x in range(0, num_circles):
         sp = np.fft.fft((t[num_samples*x:num_samples*x+num_samples]))
-        #sp = sp[0:15]
         out = np.append(out,sp)
     return out
 
@@ -134,9 +120,9 @@ def MatrixC(t):
 x_point = 0.0
 y_point = 0.0
 circle_r = 0.3
-large_circle_r = 0.65
+large_circle_r = 0.6
 num_circles = 10
-num_samples = 60 #We want the 15 first multipoles and due to Nyquist-Shannon theorem 30 samples should be enough
+num_samples = 6000 #We want the 15 first multipoles and due to Nyquist-Shannon theorem 30 samples should be enough
 
 
 #Calling function to get the field
@@ -144,10 +130,10 @@ num_samples = 60 #We want the 15 first multipoles and due to Nyquist-Shannon the
 
 #Next lines create circle coordinates and calculate the vectors along the rand of circles
 (X,Y, pos) = CircleOfCircles(x_point,y_point,large_circle_r,circle_r,num_samples,num_circles)
-(By1, Bx1) = nPoleComponent(N,X,Y,amplitude,offsetAngle,1)
+(By1, Bx1) = nPoleComponent(N,X,Y,amplitude,offsetAngle,large_circle_r)
  
 (X_ref,Y_ref,pos_ref) = CircleOfCircles(x_point,y_point,large_circle_r,circle_r,num_samples,1)
-(By1_ref, Bx1_ref) = nPoleComponent(N,X_ref,Y_ref,amplitude,offsetAngle,1)
+(By1_ref, Bx1_ref) = nPoleComponent(N,X_ref,Y_ref,amplitude,offsetAngle,large_circle_r)
 
  #Plotting the magnetic field and our circles along with their origin
 fig, ax = plt.subplots()
@@ -161,7 +147,7 @@ q = ax.quiver(X,Y,Bx1,By1, units = 'xy', cmap = plt.cm.winter,zorder=2,
           width=0.007, headwidth=1., scale=scl ,headlength=4.5,color='red')
 plt.plot(np.imag(pos),np.real(pos),'o')
 plt.plot(X,Y, '.', color='black')
-plt.show()
+#plt.show()
 
 #Plotting the Fourier transform
 
@@ -170,6 +156,7 @@ t_ref = (B_r(X_ref, Y_ref , Bx1_ref, By1_ref))
 sp = np.fft.fft(t_ref)
 sp = sp[N:15+N] #Only take multipoles from main component and following
 sp = 1e4/sp[0]*sp #Scale the multipoles
+
 
 
 plt.subplot(131)
@@ -190,7 +177,7 @@ plt.show()
 t = (B_r(X,Y,Bx1, By1))
 C = MatrixC(t)
 
-M = MatrixM(num_samples,num_samples,large_circle_r,circle_r,pos)
+M = MatrixM(num_samples,60,large_circle_r,circle_r,pos)
 Cp,res,rank,s = np.linalg.lstsq(M,C,rcond=None)
 
 
@@ -198,20 +185,22 @@ Cp_norm = Cp[N:15+N] #Only take multipoles from main component and following
 Cp_norm = 1e4/Cp_norm[0]*Cp_norm #Scale the multipoles
 
 plt.subplot(131)
-plt.stem(np.linspace(0,14,15), np.abs((sp[:15])),  linefmt='C0-',
+plt.stem(np.linspace(1,15-N,15-N), np.abs((sp[N:15])),  linefmt='C0-',
          markerfmt=" ", basefmt="-b")
 plt.legend(['Ref'])
 plt.subplot(132)
 
-plt.stem(np.linspace(0,14,15), np.abs((Cp_norm[:15])), linefmt='C1-',
+plt.stem(np.linspace(1,15-N,15-N), np.abs((Cp_norm[N:15])), linefmt='C1-',
          markerfmt=" ", basefmt="-")
-plt.legend(['Reconstructed'])
-plt.subplot(133)
+plt.legend(['Reconstructed multipoles'])
 
-print(Cp_norm[1]/np.real(Cp_norm[1]))
-print(sp[1]/np.real(sp[1]))
-plt.plot(np.linspace(0,2*np.pi,int(num_samples)),np.fft.ifft(Cp))
+plt.subplot(133)
+plt.plot(np.fft.ifft(Cp))
 plt.legend(['Reconstructed curve'])
+print(np.abs(sp[N:15]))
+print(np.abs(Cp_norm[N:15]))
+np.set_printoptions(precision=3, suppress=True)
+print("Difference in percentage for normalized multipoles: {}".format( np.around((100*np.abs(Cp_norm[N:15])/np.abs(sp[N:15])), 2  )))
 plt.show()
 
 
