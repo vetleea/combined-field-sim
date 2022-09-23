@@ -23,13 +23,15 @@ y_mesh = y_mesh[r<=Rmag]
 #       Functions           #
 #---------------------------#
 #Creates a vector given a point (x, y), in the case of meshgrid creates whole field
-def nPoleComponent(n,x,y,amplitude, angle,Rref = 1):
+def nPoleComponent(n,x,y,amplitude, angle,Rref = 1,*, add_multipoles = False ):
     #Complex plane
     z = x+y*1j
     #Complex coefficients
     Cn = amplitude*(1+0*1j)
     #Creating By + iBy
-    ByBx = Cn*np.power(z/Rref,n-1)+0.1*Cn*np.power(z/Rref,4)+0.1*Cn*np.power(z/Rref,6)
+    ByBx = Cn*np.power(z/Rref,n-1)
+    if add_multipoles: #Add simulation of 2th and 4th multipole (4 = 6-2), these were just chosen randomly.
+        ByBx += 0.1*Cn*np.power(z/Rref,4)+0.1*Cn*np.power(z/Rref,6)
     #Rotation
     ByBx = ByBx*np.exp(n*angle*1j)
     #Returning By and Bx
@@ -122,18 +124,18 @@ y_point = 0.0
 circle_r = 0.3
 large_circle_r = 0.6
 num_circles = 10
-num_samples = 6000 #We want the 15 first multipoles and due to Nyquist-Shannon theorem 30 samples should be enough
+num_samples = 60 #We want the 15 first multipoles and due to Nyquist-Shannon theorem 30 samples should be enough
 
 
 #Calling function to get the field
-(By_whole, Bx_whole) = nPoleComponent(N,x_mesh,y_mesh,amplitude,offsetAngle,1)
+(By_whole, Bx_whole) = nPoleComponent(N,x_mesh,y_mesh,amplitude,offsetAngle,1, add_multipoles=False)
 
 #Next lines create circle coordinates and calculate the vectors along the rand of circles
 (X,Y, pos) = CircleOfCircles(x_point,y_point,large_circle_r,circle_r,num_samples,num_circles)
-(By1, Bx1) = nPoleComponent(N,X,Y,amplitude,offsetAngle,large_circle_r)
+(By1, Bx1) = nPoleComponent(N,X,Y,amplitude,offsetAngle,large_circle_r, add_multipoles=True)
  
 (X_ref,Y_ref,pos_ref) = CircleOfCircles(x_point,y_point,large_circle_r,circle_r,num_samples,1)
-(By1_ref, Bx1_ref) = nPoleComponent(N,X_ref,Y_ref,amplitude,offsetAngle,large_circle_r)
+(By1_ref, Bx1_ref) = nPoleComponent(N,X_ref,Y_ref,amplitude,offsetAngle,large_circle_r, add_multipoles=True)
 
  #Plotting the magnetic field and our circles along with their origin
 fig, ax = plt.subplots()
@@ -147,7 +149,7 @@ q = ax.quiver(X,Y,Bx1,By1, units = 'xy', cmap = plt.cm.winter,zorder=2,
           width=0.007, headwidth=1., scale=scl ,headlength=4.5,color='red')
 plt.plot(np.imag(pos),np.real(pos),'o')
 plt.plot(X,Y, '.', color='black')
-#plt.show()
+plt.show()
 
 #Plotting the Fourier transform
 
